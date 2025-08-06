@@ -274,14 +274,14 @@ end
 
 ---@param data table
 local function create_event(data)
-    local event = {}
+    local events = {}
     for _, e in ipairs(data) do
         if type(e) == "string" then
-            tbl_insert(event, e)
+            tbl_insert(events, e)
         end
     end
     return {
-        event = event,
+        events = events,
         callback = data.callback,
         pattern = data.pattern,
     }
@@ -297,7 +297,7 @@ local function register_update_autocmd(component)
         })
     else
         local event = create_event(component.update)
-        if #event.event > 0 then
+        if #event.events > 0 then
             tbl_insert(events, event)
         end
 
@@ -309,7 +309,7 @@ local function register_update_autocmd(component)
     end
 
     for _, e in ipairs(events) do
-        vim.api.nvim_create_autocmd(e.event, {
+        vim.api.nvim_create_autocmd(e.events, {
             pattern = e.pattern,
             callback = function(args)
                 component._win_cache = nil
