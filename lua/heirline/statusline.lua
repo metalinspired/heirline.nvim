@@ -59,6 +59,16 @@ local default_restrict = {
 ---@field update? boolean
 ---@field minwid? number|fun(self: StatusLine):integer
 
+---@class HeirlineEvent
+---@field [integer] string
+---@field pattern? string|table
+---@field callback? function|string
+
+---@class HeirlineAutocmdArgs
+---@field events table
+---@field pattern? string|table
+---@field callback? function|string
+
 ---@class StatusLine
 ---@field condition? fun(self: StatusLine): any
 ---@field init? fun(self: StatusLine): any
@@ -66,7 +76,7 @@ local default_restrict = {
 ---@field hl? HeirlineHighlight|string|fun(self: StatusLine): HeirlineHighlight|string|nil  controls the colors of what is printed by the component's provider, or by any of its descendants.
 ---@field restrict? table<string, boolean>
 ---@field after? fun(self: StatusLine): any
----@field update? table|string|fun(self: StatusLine): boolean
+---@field update? HeirlineEvent|string|fun(self: StatusLine): boolean
 ---@field on_click? HeirlineOnClickCallback|HeirlineOnClick
 ---@field id integer[]
 ---@field winnr integer
@@ -272,8 +282,8 @@ local function register_global_function(component)
     return "v:lua." .. func_name
 end
 
----@param data table
----@return table
+---@param data HeirlineEvent
+---@return HeirlineAutocmdArgs
 local function create_autocmd_args(data)
     local events = {}
     for _, e in ipairs(data) do
@@ -297,12 +307,14 @@ local function register_update_autocmd(component)
             event = component.update,
         })
     else
-        local autocmd_args = create_autocmd_args(component.update)
+        local autocmd_args = create_autocmd_args(component.update --[[@as HeirlineEvent]])
         if #autocmd_args.events > 0 then
             tbl_insert(autocmd_args_list, autocmd_args)
         end
 
-        for _, e in ipairs(component.update) do
+        for _, e in
+            ipairs(component.update --[[@as HeirlineEvent]])
+        do
             if type(e) == "table" then
                 tbl_insert(autocmd_args_list, create_autocmd_args(e))
             end
