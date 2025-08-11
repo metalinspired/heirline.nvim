@@ -273,7 +273,8 @@ local function register_global_function(component)
 end
 
 ---@param data table
-local function create_event(data)
+---@return table
+local function create_autocmd_args(data)
     local events = {}
     for _, e in ipairs(data) do
         if type(e) == "string" then
@@ -289,26 +290,26 @@ end
 
 ---@param component StatusLine
 local function register_update_autocmd(component)
-    local events = {}
+    local autocmd_args_list = {}
 
     if type(component.update) == "string" then
-        tbl_insert(events, {
+        tbl_insert(autocmd_args_list, {
             event = component.update,
         })
     else
-        local event = create_event(component.update)
-        if #event.events > 0 then
-            tbl_insert(events, event)
+        local autocmd_args = create_autocmd_args(component.update)
+        if #autocmd_args.events > 0 then
+            tbl_insert(autocmd_args_list, autocmd_args)
         end
 
         for _, e in ipairs(component.update) do
             if type(e) == "table" then
-                tbl_insert(events, create_event(e))
+                tbl_insert(autocmd_args_list, create_autocmd_args(e))
             end
         end
     end
 
-    for _, e in ipairs(events) do
+    for _, e in ipairs(autocmd_args_list) do
         vim.api.nvim_create_autocmd(e.events, {
             pattern = e.pattern,
             callback = function(args)
