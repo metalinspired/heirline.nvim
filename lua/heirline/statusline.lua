@@ -22,7 +22,7 @@ local default_restrict = {
     update = true,
     fallthrough = true,
     _win_cache = true,
-    _au_id = true,
+    _au_set = true,
     _win_child_index = true,
 }
 
@@ -59,6 +59,16 @@ local default_restrict = {
 ---@field update? boolean
 ---@field minwid? number|fun(self: StatusLine):integer
 
+---@class HeirlineEvent
+---@field [integer] string
+---@field pattern? string|table
+---@field callback? function|string
+
+---@class HeirlineAutocmdArgs
+---@field events table
+---@field pattern? string|table
+---@field callback? function|string
+
 ---@class StatusLine
 ---@field condition? fun(self: StatusLine): any
 ---@field init? fun(self: StatusLine): any
@@ -66,14 +76,14 @@ local default_restrict = {
 ---@field hl? HeirlineHighlight|string|fun(self: StatusLine): HeirlineHighlight|string|nil  controls the colors of what is printed by the component's provider, or by any of its descendants.
 ---@field restrict? table<string, boolean>
 ---@field after? fun(self: StatusLine): any
----@field update? table|string|fun(self: StatusLine): boolean
+---@field update? HeirlineEvent|string|fun(self: StatusLine): boolean
 ---@field on_click? HeirlineOnClickCallback|HeirlineOnClick
 ---@field id integer[]
 ---@field winnr integer
 ---@field fallthrough boolean
 ---@field flexible integer
 ---@field _win_cache? table
----@field _au_id? integer
+---@field _au_set? boolean
 ---@field _tree table
 ---@field _updatable_components table
 ---@field _flexible_components table
@@ -272,32 +282,59 @@ local function register_global_function(component)
     return "v:lua." .. func_name
 end
 
----@param component StatusLine
-local function register_update_autocmd(component)
-    local events, callback, pattern
-    if type(component.update) == "string" then
-        events = component.update
-    else
-        events = {}
-        for i, e in ipairs(component.update) do
+---@param data HeirlineEvent
+---@return HeirlineAutocmdArgs
+local function create_autocmd_args(data)
+    local events = {}
+    for _, e in ipairs(data) do
+        if type(e) == "string" then
             tbl_insert(events, e)
         end
-        callback = component.update.callback
-        pattern = component.update.pattern
+    end
+    return {
+        events = events,
+        callback = data.callback,
+        pattern = data.pattern,
+    }
+end
+
+---@param component StatusLine
+local function register_update_autocmd(component)
+    local autocmd_args_list = {}
+
+    if type(component.update) == "string" then
+        tbl_insert(autocmd_args_list, {
+            event = component.update,
+        })
+    else
+        local autocmd_args = create_autocmd_args(component.update --[[@as HeirlineEvent]])
+        if #autocmd_args.events > 0 then
+            tbl_insert(autocmd_args_list, autocmd_args)
+        end
+
+        for _, e in
+            ipairs(component.update --[[@as HeirlineEvent]])
+        do
+            if type(e) == "table" then
+                tbl_insert(autocmd_args_list, create_autocmd_args(e))
+            end
+        end
     end
 
-    local id = vim.api.nvim_create_autocmd(events, {
-        pattern = pattern,
-        callback = function(args)
-            component._win_cache = nil
-            if callback then
-                callback(component, args)
-            end
-        end,
-        desc = "Heirline update autocmd for " .. vim.inspect(component.id),
-        group = "Heirline_update_autocmds",
-    })
-    component._au_id = id
+    for _, e in ipairs(autocmd_args_list) do
+        vim.api.nvim_create_autocmd(e.events, {
+            pattern = e.pattern,
+            callback = function(args)
+                component._win_cache = nil
+                if e.callback then
+                    e.callback(component, args)
+                end
+            end,
+            desc = "Heirline update autocmd for " .. vim.inspect(component.id),
+            group = "Heirline_update_autocmds",
+        })
+    end
+    component._au_set = true
 end
 
 ---Evaluate component and its children recursively
@@ -325,7 +362,7 @@ function StatusLine:_eval()
                 self._win_cache = nil
             end
         else
-            if not self._au_id then
+            if not self._au_set then
                 register_update_autocmd(self)
             end
         end
